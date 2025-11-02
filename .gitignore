@@ -1,0 +1,124 @@
+# ===================================
+# PYTHON / DJANGO
+# ===================================
+
+# Archivos compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos temporales y backups
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.bak
+*.tmp
+*.orig
+
+# ===================================
+# ENTORNOS VIRTUALES
+# ===================================
+venv/
+env/
+ENV/
+.venv/
+.env/
+env.bak/
+venv.bak/
+
+# ===================================
+# VARIABLES DE ENTORNO
+# ===================================
+.env
+*.env
+.env.*
+
+# ===================================
+# BASES DE DATOS LOCALES
+# ===================================
+db.sqlite3
+*.sqlite3
+
+# ===================================
+# ARCHIVOS DE SISTEMA
+# ===================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===================================
+# EDITORES / IDEs
+# ===================================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ===================================
+# ARCHIVOS GENERADOS POR DJANGO
+# ===================================
+media/
+staticfiles/
+static/
+__pycache__/
+*.mo
+
+# ===================================
+# MIGRACIONES (opcional)
+# ===================================
+# Si estás trabajando solo y no necesitas compartirlas,
+# puedes descomentarlo; si colaboras, mantenlas versionadas.
+# */migrations/
+# !*/migrations/__init__.py
+
+# ===================================
+# CACHE / COVERAGE / TESTS
+# ===================================
+*.coverage
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+htmlcov/
+.tox/
+.pytest_cache/
+*.pytest_cache/
+
+# ===================================
+# COMPILACIÓN / DESPLIEGUE
+# ===================================
+build/
+dist/
+*.egg-info/
+.eggs/
+*.manifest
+*.spec
+*.pid
+
+# ===================================
+# LOGS / REPORTES
+# ===================================
+*.log
+*.out
+*.err
+logs/
+
+# ===================================
+# CONFIGURACIÓN DE DOCKER (opcional)
+# ===================================
+/docker-compose.override.yml
+*.db
+*.pid
+*.sock
+__docker_volume__/
+__data__/
+
+# ===================================
+# ARCHIVOS DE BACKUP O TEMPORALES DE WINDOWS
+# ===================================
+~$*
+*.tmp
