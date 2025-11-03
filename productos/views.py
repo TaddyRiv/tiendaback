@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import permissions
+from rest_framework.permissions import AllowAny
 
 from productos.models import Category, Product, Provider, ProviderProduct
 from productos.serializers import (
@@ -17,7 +18,7 @@ from productos.serializers import (
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all().order_by('descripcion')
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
 
 class ProviderViewSet(viewsets.ModelViewSet):
