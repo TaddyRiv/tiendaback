@@ -300,82 +300,156 @@ class ReportesAvanzados:
     
     @staticmethod
     def analisis_rfm_clientes():
-        """Segmentación RFM (Recency, Frequency, Monetary)"""
-        from django.db.models import Window
-        from django.db.models.functions import Ntile
+        """Segmentación RFM (Recency, Frequency, Monetary) - Compatible con SQLite"""
+        try:
+            import numpy as np
+        except ImportError:
+            return {
+                'error': 'Se requiere numpy. Instala con: pip install numpy',
+                'clientes': [],
+                'resumen_segmentos': {}
+            }
         
         # Calcular métricas RFM
         hoy = timezone.now().date()
-        clientes = Usuario.objects.annotate(
-            ultima_compra_fecha=Max('ventas_como_cliente__fecha'),
-            recency=ExpressionWrapper(
-                Value(hoy) - F('ultima_compra_fecha'),
-                output_field=IntegerField()
-            ),
-            frequency=Count('ventas_como_cliente'),
-            monetary=Sum('ventas_como_cliente__monto')
-        ).filter(frequency__gt=0)
         
-        # Calcular scores (dividir en quintiles)
-        clientes = clientes.annotate(
-            r_score=Window(
-                expression=Ntile(5),
-                order_by=F('recency').asc()
-            ),
-            f_score=Window(
-                expression=Ntile(5),
-                order_by=F('frequency').desc()
-            ),
-            m_score=Window(
-                expression=Ntile(5),
-                order_by=F('monetary').desc()
-            )
+        # Obtener clientes con sus métricas básicas
+        clientes = Usuario.objects.filter(
+            ventas_como_cliente__isnull=False
+        ).annotate(
+            ultima_compra_fecha=Max('ventas_como_cliente__fecha'),
+            frequency=Count('ventas_como_cliente__id', distinct=True),
+            monetary=Sum('ventas_como_cliente__monto')
+        ).filter(
+            frequency__gt=0
         )
         
-        # Asignar segmentos
-        clientes_rfm = clientes.annotate(
-            rfm_total=F('r_score') + F('f_score') + F('m_score'),
-            segmento=Case(
-                When(Q(r_score__gte=4) & Q(f_score__gte=4) & Q(m_score__gte=4), 
-                     then=Value('Champions')),
-                When(Q(r_score__gte=3) & Q(f_score__gte=3) & Q(m_score__gte=3), 
-                     then=Value('Leales')),
-                When(Q(r_score__gte=4) & Q(f_score__lte=2), 
-                     then=Value('Nuevos Prometedores')),
-                When(Q(r_score__lte=2) & Q(f_score__gte=4), 
-                     then=Value('En Riesgo')),
-                When(Q(r_score__lte=2) & Q(f_score__lte=2), 
-                     then=Value('Perdidos')),
-                default=Value('Normales'),
-                output_field=models.CharField()
-            )
-        ).values(
-            'id', 'email', 'first_name', 'last_name',
-            'recency', 'frequency', 'monetary',
-            'r_score', 'f_score', 'm_score', 'rfm_total', 'segmento'
-        ).order_by('-rfm_total')
+        # Convertir a lista y agregar valores por defecto
+        clientes_list = []
+        for cliente in clientes:
+            clientes_list.append({
+                'id': cliente.id,
+                'email': cliente.email,
+                'first_name': cliente.first_name or '',
+                'last_name': cliente.last_name or '',
+                'ultima_compra_fecha': cliente.ultima_compra_fecha,
+                'frequency': cliente.frequency,
+                'monetary': float(cliente.monetary or 0)
+            })
         
-        # Resumen por segmento
+        if not clientes_list:
+            return {
+                'clientes': [],
+                'resumen_segmentos': {},
+                'mensaje': 'No hay clientes con compras para analizar'
+            }
+        
+        # Calcular recency (días desde última compra)
+        for cliente in clientes_list:
+            if cliente['ultima_compra_fecha']:
+                cliente['recency'] = (hoy - cliente['ultima_compra_fecha']).days
+            else:
+                cliente['recency'] = 9999
+        
+        # Extraer valores para calcular scores
+        recency_values = [c['recency'] for c in clientes_list]
+        frequency_values = [c['frequency'] for c in clientes_list]
+        monetary_values = [c['monetary'] for c in clientes_list]
+        
+        # Función para calcular score de 1-5 basado en quintiles
+        def calcular_score(valor, valores, invertir=False):
+            """Calcula el score de 1-5 basado en quintiles"""
+            valores_unicos = list(set(valores))
+            
+            if len(valores_unicos) == 1:
+                return 3
+            
+            try:
+                quintiles = np.percentile(valores, [20, 40, 60, 80])
+            except:
+                return 3
+            
+            if invertir:  # Para recency (menor días = mejor cliente)
+                if valor <= quintiles[0]:
+                    return 5
+                elif valor <= quintiles[1]:
+                    return 4
+                elif valor <= quintiles[2]:
+                    return 3
+                elif valor <= quintiles[3]:
+                    return 2
+                else:
+                    return 1
+            else:  # Para frequency y monetary (mayor = mejor)
+                if valor >= quintiles[3]:
+                    return 5
+                elif valor >= quintiles[2]:
+                    return 4
+                elif valor >= quintiles[1]:
+                    return 3
+                elif valor >= quintiles[0]:
+                    return 2
+                else:
+                    return 1
+        
+        # Asignar scores a cada cliente
+        for cliente in clientes_list:
+            cliente['r_score'] = calcular_score(cliente['recency'], recency_values, invertir=True)
+            cliente['f_score'] = calcular_score(cliente['frequency'], frequency_values)
+            cliente['m_score'] = calcular_score(cliente['monetary'], monetary_values)
+            cliente['rfm_total'] = cliente['r_score'] + cliente['f_score'] + cliente['m_score']
+            
+            # Asignar segmento basado en scores
+            r = cliente['r_score']
+            f = cliente['f_score']
+            m = cliente['m_score']
+            
+            if r >= 4 and f >= 4 and m >= 4:
+                segmento = 'Champions'
+            elif r >= 3 and f >= 3 and m >= 3:
+                segmento = 'Leales'
+            elif r >= 4 and f <= 2:
+                segmento = 'Nuevos Prometedores'
+            elif r <= 2 and f >= 4:
+                segmento = 'En Riesgo'
+            elif r <= 2 and f <= 2:
+                segmento = 'Perdidos'
+            else:
+                segmento = 'Normales'
+            
+            cliente['segmento'] = segmento
+        
+        # Ordenar por RFM total
+        clientes_list.sort(key=lambda x: x['rfm_total'], reverse=True)
+        
+        # Calcular resumen por segmento
         resumen_segmentos = {}
-        for cliente in clientes_rfm:
+        for cliente in clientes_list:
             seg = cliente['segmento']
             if seg not in resumen_segmentos:
                 resumen_segmentos[seg] = {
                     'cantidad': 0,
-                    'valor_total': 0,
-                    'frecuencia_promedio': 0
+                    'valor_total': 0.0,
+                    'frecuencia_promedio': 0.0
                 }
+            
             resumen_segmentos[seg]['cantidad'] += 1
-            resumen_segmentos[seg]['valor_total'] += float(cliente['monetary'] or 0)
+            resumen_segmentos[seg]['valor_total'] += cliente['monetary']
             resumen_segmentos[seg]['frecuencia_promedio'] += cliente['frequency']
         
+        # Calcular promedios
         for seg in resumen_segmentos:
-            if resumen_segmentos[seg]['cantidad'] > 0:
-                resumen_segmentos[seg]['frecuencia_promedio'] /= resumen_segmentos[seg]['cantidad']
+            cantidad = resumen_segmentos[seg]['cantidad']
+            if cantidad > 0:
+                resumen_segmentos[seg]['frecuencia_promedio'] = round(
+                    resumen_segmentos[seg]['frecuencia_promedio'] / cantidad, 2
+                )
+            resumen_segmentos[seg]['valor_total'] = round(resumen_segmentos[seg]['valor_total'], 2)
         
         return {
-            'clientes': list(clientes_rfm),
-            'resumen_segmentos': resumen_segmentos
+            'clientes': clientes_list,
+            'resumen_segmentos': resumen_segmentos,
+            'total_clientes_analizados': len(clientes_list)
         }
     
     @staticmethod

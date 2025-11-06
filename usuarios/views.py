@@ -9,7 +9,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from usuarios.models import Usuario
 from usuarios.serializers import UsuarioSerializer, LoginSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
-
+from usuarios.models import Rol
+from usuarios.serializers import RolSerializer
+from django.db.models import ProtectedError
 
 # --- Login ---
 class LoginView(APIView):
@@ -32,4 +34,18 @@ class LoginView(APIView):
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
+    permission_classes = [IsAuthenticated]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.estado = False  # Desactivar en lugar de eliminar
+        instance.save()
+        return Response(
+            {"detail": "Usuario desactivado correctamente."},
+            status=status.HTTP_200_OK
+        )
+
+class RolViewSet(viewsets.ModelViewSet):
+    queryset = Rol.objects.all()
+    serializer_class = RolSerializer
     permission_classes = [IsAuthenticated]
