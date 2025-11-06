@@ -11,12 +11,37 @@ class RolSerializer(serializers.ModelSerializer):
 
 class UsuarioSerializer(serializers.ModelSerializer):
     rol = RolSerializer(read_only=True)
+    rol_id = serializers.PrimaryKeyRelatedField(
+        queryset=Rol.objects.all(),
+        source='rol',
+        write_only=True,
+        required=False
+    )
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Usuario
-        fields = ['id', 'username', 'email', 'telefono', 'direccion', 'estado', 'rol']
+        fields = ['id', 'username', 'email', 'telefono', 'direccion', 'estado', 'rol', 'rol_id', 'password']
 
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        user = Usuario(**validated_data)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_password("123456") 
+        user.save()
+        return user
 
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        return instance
+    
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
