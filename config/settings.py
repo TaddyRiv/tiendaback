@@ -5,6 +5,7 @@ from datetime import timedelta
 # Cargar variables del archivo .env
 load_dotenv()
 
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Base del proyecto
 BASE_DIR = Path(__file__).resolve().parent.parent
 

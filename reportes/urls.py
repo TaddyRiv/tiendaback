@@ -3,6 +3,9 @@ from django.urls import include
 from reportes import views
 from .views import (
     # Reportes Básicos
+    ProbarTranscripcionView,
+    ReportesPorVozView,
+    ReportesTextoView,
     VentasPorPeriodoView,
     TopProductosView,
     ProductosBajoStockView,
@@ -59,5 +62,9 @@ urlpatterns = [
     path('exportar/', ExportarReporteView.as_view(), name='exportar'),
 
     path('historial/', views.HistorialReportesView.as_view(), name='historial_reportes'),
+
+    path('voz/', ReportesPorVozView.as_view(), name='voz'),
+    path('texto/', ReportesTextoView.as_view(), name='texto'),
+    path('probar-audio/', ProbarTranscripcionView.as_view(), name='probar-audio'),
 
 ]
