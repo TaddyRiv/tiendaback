@@ -117,6 +117,19 @@ class ReportesBasicos:
                 pagado=False
             ).count()
         }
+    
+    def top_clientes(fecha_inicio, fecha_fin, limite=3):
+        """Obtiene los clientes con más compras (por monto total)"""
+        queryset = (
+            SalesNote.objects.filter(fecha__range=[fecha_inicio, fecha_fin])
+            .values('cliente__id', 'cliente__nombre')
+            .annotate(
+                total_compras=Count('id'),
+                monto_total=Sum('total')
+            )
+            .order_by('-monto_total')[:limite]
+        )
+        return list(queryset)
 
 
 # reportes nivele 2
@@ -689,16 +702,23 @@ class GeneradorReportes:
         return self
     
     def ejecutar(self):
-        """Ejecutar el reporte"""
+        """Ejecutar el reporte y devolver datos serializables"""
         queryset = self.modelo.objects.filter(self.filtros)
-        
+    
         if self.agrupaciones:
             queryset = queryset.values(*self.agrupaciones)
-        
+    
         if self.anotaciones:
             queryset = queryset.annotate(**self.anotaciones)
-        
+    
         if self.ordenamiento:
-            queryset = queryset.order_by(*self.ordenamiento)
-        
-        return list(queryset)
+          queryset = queryset.order_by(*self.ordenamiento)
+
+        # Ejecutamos y convertimos a lista
+        data = list(queryset)
+
+        # ✅ Si los elementos son instancias de modelo, convertir a diccionarios
+        if data and hasattr(data[0], "_meta"):  # detecta objetos Django
+          data = list(queryset.values())
+
+        return data

@@ -751,6 +751,9 @@ class ReportesPorVozView(APIView):
             'top_productos': lambda p: ReportesBasicos.top_productos(
                 p['fecha_inicio'], p['fecha_fin'], p.get('limite', 10)
             ),
+            'top_clientes': lambda p: ReportesBasicos.top_clientes(
+                p['fecha_inicio'],p['fecha_fin'], p.get('limite', 3)
+            ),
             'bajo_stock': lambda p: ReportesBasicos.productos_bajo_stock(
                 p.get('minimo', 10)
             ),
@@ -779,6 +782,8 @@ class ReportesPorVozView(APIView):
         }
         
         modelo_nombre = config.get('modelo', 'ventas')
+        if modelo_nombre == "clientes":
+            modelo_nombre = "ventas"
         if modelo_nombre not in MODELOS:
             raise ValueError(f"Modelo '{modelo_nombre}' no válido")
         
@@ -866,24 +871,24 @@ class ReportesTextoView(APIView):
     
     def post(self, request):
         texto = request.data.get('texto')
-        
+
         if not texto:
             return Response({
                 'error': 'Campo "texto" requerido'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         ia_service = ReportesIAService()
-        
+
         # Interpretar
         interpretacion = ia_service.interpretar_solicitud(texto)
-        
+
         if 'error' in interpretacion:
             return Response(interpretacion, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # Ejecutar
         try:
             vista_voz = ReportesPorVozView()
-            
+
             if interpretacion['tipo'] == 'predefinido':
                 datos = vista_voz._ejecutar_reporte_predefinido(
                     interpretacion['reporte'],
@@ -893,19 +898,21 @@ class ReportesTextoView(APIView):
                 datos = vista_voz._ejecutar_reporte_dinamico(
                     interpretacion['config']
                 )
-            
-            # Respuesta natural
+
             descripcion = interpretacion.get('descripcion_humana', 'Reporte')
             respuesta = ia_service.generar_respuesta_natural(datos, descripcion)
-            
+
             return Response({
                 'texto_usuario': texto,
                 'interpretacion': interpretacion,
                 'datos': datos,
                 'respuesta': respuesta
             }, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
+            import traceback
+            print("❌ ERROR EN ReportesTextoView:")
+            traceback.print_exc()  # <--- imprime el error real
             return Response({
                 'error': str(e),
                 'interpretacion': interpretacion
