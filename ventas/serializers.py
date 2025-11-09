@@ -3,6 +3,8 @@ from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
 from django.db import transaction
+from ventas.models import SalesNote, DetailNote, CashPayment
+from productos.models import Product
 
 from ventas.models import SalesNote, DetailNote, CashPayment
 from productos.models import Product
@@ -110,3 +112,14 @@ class SalesNoteSerializer(serializers.ModelSerializer):
 
         return nota
 
+class ProductoSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['id', 'nombre']  # Solo lo necesario
+
+class DetalleVentaSerializer(serializers.ModelSerializer):
+    producto = ProductoSimpleSerializer(read_only=True)  # ✅ incluir nombre del producto
+
+    class Meta:
+        model = DetailNote
+        fields = ['id', 'nota', 'producto', 'fecha', 'cantidad', 'subtotal']
