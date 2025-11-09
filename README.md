@@ -28,7 +28,7 @@ python manage.py migrate
 correr seeders en este orden
 python manage.py seed_roles
 python manage.py seed_ventas
-
+python manage.py seed_tienda
 //////////////////////////////////////////
 para levantar el servidor de desarrollo
 python manage.py runserver
