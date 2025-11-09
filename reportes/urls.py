@@ -1,6 +1,7 @@
 from django.urls import path
 from django.urls import include
 from reportes import views
+from reportes.views_ml import EntrenarModeloMLView, PredecirDemandaMLView, ReporteComprasMLView
 from .views import (
     # Reportes Básicos
     ProbarTranscripcionView,
@@ -67,4 +68,7 @@ urlpatterns = [
     path('texto/', ReportesTextoView.as_view(), name='texto'),
     path('probar-audio/', ProbarTranscripcionView.as_view(), name='probar-audio'),
 
+    path('ml/entrenar/', EntrenarModeloMLView.as_view(), name='entrenar_modelo_ml'),
+    path('ml/prediccion/<int:producto_id>/', PredecirDemandaMLView.as_view(), name='predecir_demanda_ml'),
+    path('ml/reporte_compras/', ReporteComprasMLView.as_view(), name='reporte_compras_ml'),
 ]

@@ -1,7 +1,7 @@
 from django.db import models
 from usuarios.models import Usuario
 from productos.models import Product
-
+from django.utils import timezone
 class SalesNote(models.Model):
     cliente = models.ForeignKey(
         Usuario,
@@ -14,7 +14,7 @@ class SalesNote(models.Model):
         null=True,
         related_name='ventas_realizadas'
     )
-    fecha = models.DateField(auto_now_add=True)
+    fecha = models.DateField(default=timezone.now)
     monto = models.DecimalField(max_digits=10, decimal_places=2)
     tipo_pago = models.CharField(max_length=50)
     estado = models.CharField(max_length=20, default='pendiente')

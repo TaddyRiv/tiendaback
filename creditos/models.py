@@ -1,6 +1,6 @@
 from django.db import models
 from ventas.models import SalesNote
-
+from django.utils import timezone
 class CreditConfig(models.Model):
     monto_max = models.DecimalField(max_digits=10, decimal_places=2)
     tasa_interes = models.DecimalField(max_digits=5, decimal_places=2)
@@ -76,7 +76,7 @@ class CreditPayment(models.Model):
         on_delete=models.CASCADE,
         related_name='pagos'
     )
-    fecha = models.DateField(auto_now_add=True)
+    fecha = models.DateField(default=timezone.now)
     monto_pagado = models.DecimalField(max_digits=10, decimal_places=2)
     metodo = models.CharField(
         max_length=50,
