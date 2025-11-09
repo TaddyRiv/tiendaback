@@ -1,8 +1,5 @@
 from django.shortcuts import render
-
-# Create your views here.
 from rest_framework import viewsets, status
-
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -12,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from usuarios.models import Rol
 from usuarios.serializers import RolSerializer
 from django.db.models import ProtectedError
+from rest_framework.decorators import action
 
 # --- Login ---
 class LoginView(APIView):
@@ -44,6 +42,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             {"detail": "Usuario desactivado correctamente."},
             status=status.HTTP_200_OK
         )
+    @action(detail=False, methods=['get'])
+    def empleados(self, request):
+        empleados = Usuario.objects.filter(rol__nombre__iexact="Empleado", estado=True)
+        serializer = self.get_serializer(empleados, many=True)
+        return Response(serializer.data)
 
 class RolViewSet(viewsets.ModelViewSet):
     queryset = Rol.objects.all()

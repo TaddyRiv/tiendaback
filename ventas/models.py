@@ -62,3 +62,27 @@ class CashPayment(models.Model):
 
     def __str__(self):
         return f"Pago {self.metodo} - {self.monto}"
+    
+
+class PendingSale(models.Model):
+    intent_id = models.CharField(max_length=100, unique=True)
+    cliente_id = models.IntegerField()
+    empleado_id = models.IntegerField()
+    tipo_pago = models.CharField(max_length=20)  # "efectivo" | "tarjeta" | "credito"
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    detalles = models.JSONField()  # [{producto_id, cantidad, subtotal}, ...]
+    estado = models.CharField(
+        max_length=20,
+        choices=[('pendiente', 'Pendiente'), ('creada', 'Creada'), ('fallida', 'Fallida')],
+        default='pendiente'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'pending_sale'
+        verbose_name = 'Venta Pendiente'
+        verbose_name_plural = 'Ventas Pendientes'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"PendingSale #{self.id} - {self.tipo_pago} ({self.estado})"
