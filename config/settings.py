@@ -16,7 +16,7 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PUBLIC_KEY = os.getenv("STRIPE_PUBLIC_KEY")
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+ALLOWED_HOSTS = ["3.151.4.203", "localhost", "127.0.0.1"]
 
 # Aplicaciones principales
 INSTALLED_APPS = [
@@ -143,10 +143,9 @@ REST_FRAMEWORK = {
 # CORS (para conectar con Flask u otro frontend)
 # -------------------------------
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Flask local
+    "http://3.151.4.203",
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://localhost:8000",  # Django local
-    "http://127.0.0.1:8000",
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
