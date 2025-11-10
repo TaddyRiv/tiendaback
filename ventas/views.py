@@ -1,6 +1,6 @@
 from rest_framework import viewsets, permissions
 from ventas.models import SalesNote, DetailNote, CashPayment
-from ventas.serializers import SalesNoteSerializer, DetailNoteSerializer, DetalleVentaSerializer
+from ventas.serializers import SalesNoteSerializer, DetalleVentaSerializer,MisComprasSerializer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db import transaction
@@ -14,6 +14,8 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from productos.models import Product
 stripe.api_key = settings.STRIPE_SECRET_KEY
+from rest_framework import status
+from datetime import timedelta
 
 class SalesNoteViewSet(viewsets.ModelViewSet):
     queryset = SalesNote.objects.all().select_related('cliente', 'empleado')
@@ -57,65 +59,108 @@ class StripeCreateIntentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        """
-        Crea un PaymentIntent según el tipo de pago.
-        Si es crédito, solo se cobra la primera cuota.
-        """
         data = request.data
-        print("📦 DATA RECIBIDA DESDE FRONT:", data)  
-        tipo_pago = data.get('tipo_pago')
-        detalles = data.get('detalles', [])
-        cliente = data.get('cliente')
-        empleado = data.get('empleado')
+        print(" DATA RECIBIDA DESDE FRONT:", data)
+        tipo_pago = data.get("tipo_pago")
+        envio = data.get("envio", {})
+        detalles = data.get("detalles", [])
+        cliente = data.get("cliente")
+        empleado = data.get("empleado")
 
-        # Validación básica
         if not cliente or not empleado or not detalles:
             return Response({"detail": "Datos incompletos"}, status=400)
 
-        # Recalcular total desde backend
-        total = Decimal('0.00')
+        total = Decimal("0.00")
         for d in detalles:
-            producto = Product.objects.get(pk=d['producto_id'])
-            subtotal = Decimal(producto.precio) * Decimal(d['cantidad'])
+            producto = Product.objects.get(pk=d["producto_id"])
+            subtotal = Decimal(producto.precio) * Decimal(d["cantidad"])
             total += subtotal
 
         total_con_interes = total
         monto_a_cobrar = total
 
-        # Si es crédito, aplicar interés y cobrar primera cuota
+        # 🔹 Calcular interés si es crédito
         if tipo_pago == "credito":
             config = CreditConfig.objects.first()
             if not config:
                 return Response({"detail": "Falta configuración de crédito."}, status=400)
 
-            interes = Decimal(config.tasa_interes) / Decimal('100')
-            total_con_interes = (total * (1 + interes)).quantize(Decimal('0.01'))
-            monto_a_cobrar = (total_con_interes / config.cantidad_cuotas).quantize(Decimal('0.01'))
+            interes = Decimal(config.tasa_interes) / Decimal("100")
+            total_con_interes = (total * (1 + interes)).quantize(Decimal("0.01"))
+            monto_a_cobrar = (total_con_interes / config.cantidad_cuotas).quantize(Decimal("0.01"))
 
-        # Crear PaymentIntent en Stripe
+        # 🔹 Crear PaymentIntent (Stripe simulado)
         intent = stripe.PaymentIntent.create(
-            amount=int(monto_a_cobrar * 100),  # Stripe usa centavos
-            currency="usd",                    # o "bob" si está habilitado
-            metadata={
-                "cliente": str(cliente),
-                "empleado": str(empleado),
-                "tipo_pago": tipo_pago,
-            },
+            amount=int(monto_a_cobrar * 100),
+            currency="usd",
             description=f"Venta tienda - pago {tipo_pago}",
             automatic_payment_methods={"enabled": True},
+            metadata={"cliente": str(cliente), "empleado": str(empleado)},
         )
 
-        # Guardar PendingSale
-        PendingSale.objects.create(
-            intent_id=intent.id,
+        # 🔹 Guardar venta local (tu flujo actual)
+        venta = SalesNote.objects.create(
             cliente_id=cliente,
             empleado_id=empleado,
             tipo_pago=tipo_pago,
             monto=total_con_interes,
-            detalles=detalles,
+            estado="completado" if tipo_pago == "efectivo" else "pendiente",
         )
 
+        for d in detalles:
+            producto = Product.objects.get(pk=d["producto_id"])
+            DetailNote.objects.create(
+                nota=venta,
+                producto=producto,
+                cantidad=d["cantidad"],
+                subtotal=Decimal(producto.precio) * Decimal(d["cantidad"]),
+            )
+
+        # 🔹 Si la venta es a crédito → generar el plan de pago automático
+        if tipo_pago == "credito":
+            try:
+                config = CreditConfig.objects.first()
+                interes = Decimal(config.tasa_interes) / Decimal("100")
+                total_con_interes = (total * (1 + interes)).quantize(Decimal("0.01"))
+
+                from creditos.models import CreditSale, CreditInstallment
+
+                credito = CreditSale.objects.create(
+                    nota_venta=venta,
+                    total_original=total,
+                    total_con_intereses=total_con_interes,
+                    tasa_aplicada=config.tasa_interes,
+                    saldo_pendiente=total_con_interes,
+                    estado="activo",
+                    fecha_inicial=timezone.now().date(),
+                    fecha_vencimiento=timezone.now().date() + timedelta(
+                        days=config.cantidad_cuotas * config.dias_entre_cuotas
+                    ),
+                )
+
+                monto_cuota = (total_con_interes / Decimal(config.cantidad_cuotas)).quantize(Decimal("0.01"))
+                for i in range(1, config.cantidad_cuotas + 1):
+                    CreditInstallment.objects.create(
+                        venta_credito=credito,
+                        numero=i,
+                        fecha_vencimiento=timezone.now().date() + timedelta(days=i * config.dias_entre_cuotas),
+                        monto=monto_cuota,
+                        pagado=False,
+                    )
+
+                print(f"✅ Plan de crédito generado: {config.cantidad_cuotas} cuotas de {monto_cuota} Bs.")
+            except Exception as e:
+                print("❌ Error al crear plan de crédito:", str(e))
+
+        # 🔹 Dirección de envío opcional
+        if envio and envio.get("direccion"):
+            print("🚚 Dirección registrada:", envio["direccion"])
+
+        print("✅ Venta simulada guardada con ID:", venta.id)
+
         return Response({"client_secret": intent.client_secret}, status=200)
+
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class StripeWebhookView(APIView):
@@ -132,7 +177,7 @@ class StripeWebhookView(APIView):
                 sig_header=sig,
                 secret=settings.STRIPE_WEBHOOK_SECRET,
             )
-            print("✅ WEBHOOK RECIBIDO:", event["type"])
+            print(" WEBHOOK RECIBIDO:", event["type"])
 
         except Exception as e:
             return Response({"error": str(e)}, status=400)
@@ -182,3 +227,19 @@ class StripeWebhookView(APIView):
                 pass  # Ya procesado
 
         return Response({"status": "ok"}, status=200)
+    
+class MisComprasView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        ventas = (
+            SalesNote.objects
+            .filter(cliente=user)
+            .select_related("empleado")
+            .prefetch_related("detalles__producto")
+            .order_by("-fecha")
+        )
+
+        serializer = MisComprasSerializer(ventas, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

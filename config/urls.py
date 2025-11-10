@@ -11,6 +11,7 @@ urlpatterns = [
     path('api/', include('productos.urls')),
     path('api/', include('ventas.urls')),
     path('api/reportes/', include('reportes.urls')),
+    path('api/creditos/', include('creditos.urls')),
 ] 
 
 # Solo para desarrollo (DEBUG=True)

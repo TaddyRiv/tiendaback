@@ -123,3 +123,42 @@ class DetalleVentaSerializer(serializers.ModelSerializer):
     class Meta:
         model = DetailNote
         fields = ['id', 'nota', 'producto', 'fecha', 'cantidad', 'subtotal']
+
+class DetalleCompraClienteSerializer(serializers.ModelSerializer):
+    producto_nombre = serializers.CharField(source="producto.nombre", read_only=True)
+
+    class Meta:
+        model = DetailNote
+        fields = ["id", "producto_nombre", "cantidad", "subtotal", "fecha"]
+
+
+
+
+class MisComprasSerializer(serializers.ModelSerializer):
+    empleado_nombre = serializers.CharField(source="empleado.username", read_only=True)
+    detalles = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SalesNote
+        fields = [
+            "id",
+            "fecha",
+            "monto",
+            "tipo_pago",
+            "estado",
+            "empleado_nombre",
+            "detalles",
+        ]
+
+    def get_detalles(self, obj):
+        """Devuelve los detalles de la venta con los productos incluidos."""
+        detalles = obj.detalles.select_related("producto").all()
+        return [
+            {
+                "producto": d.producto.nombre,
+                "cantidad": d.cantidad,
+                "subtotal": str(d.subtotal),
+                "fecha": d.fecha.strftime("%Y-%m-%d"),
+            }
+            for d in detalles
+        ]
