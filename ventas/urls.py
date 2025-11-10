@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from ventas.views import SalesNoteViewSet, DetailNoteViewSet, CashPaymentViewSet
 from ventas.views import StripeCreateIntentView, StripeWebhookView
+from ventas.views import MisComprasView
 
 router = DefaultRouter()
 router.register(r'ventas', SalesNoteViewSet, basename='ventas')
@@ -12,4 +13,5 @@ urlpatterns = [
     path('', include(router.urls)),
     path('pagos/stripe/create-intent/', StripeCreateIntentView.as_view(), name='stripe-create-intent'),
     path('pagos/stripe/webhook/', StripeWebhookView.as_view(), name='stripe-webhook'),
+    path('mis-compras/', MisComprasView.as_view(), name='mis-compras'),
 ]
