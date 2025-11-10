@@ -15,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from productos.models import Product
 stripe.api_key = settings.STRIPE_SECRET_KEY
 from rest_framework import status
+from datetime import timedelta
 
 class SalesNoteViewSet(viewsets.ModelViewSet):
     queryset = SalesNote.objects.all().select_related('cliente', 'empleado')
@@ -78,6 +79,7 @@ class StripeCreateIntentView(APIView):
         total_con_interes = total
         monto_a_cobrar = total
 
+        # 🔹 Calcular interés si es crédito
         if tipo_pago == "credito":
             config = CreditConfig.objects.first()
             if not config:
@@ -87,7 +89,7 @@ class StripeCreateIntentView(APIView):
             total_con_interes = (total * (1 + interes)).quantize(Decimal("0.01"))
             monto_a_cobrar = (total_con_interes / config.cantidad_cuotas).quantize(Decimal("0.01"))
 
-        # 🔹 Crear PaymentIntent (simulación)
+        # 🔹 Crear PaymentIntent (Stripe simulado)
         intent = stripe.PaymentIntent.create(
             amount=int(monto_a_cobrar * 100),
             currency="usd",
@@ -96,13 +98,13 @@ class StripeCreateIntentView(APIView):
             metadata={"cliente": str(cliente), "empleado": str(empleado)},
         )
 
-        # 🔹 Guardar venta local (solo simulación)
+        # 🔹 Guardar venta local (tu flujo actual)
         venta = SalesNote.objects.create(
             cliente_id=cliente,
             empleado_id=empleado,
             tipo_pago=tipo_pago,
-            monto=total_con_interes,  
-            estado="completado",
+            monto=total_con_interes,
+            estado="completado" if tipo_pago == "efectivo" else "pendiente",
         )
 
         for d in detalles:
@@ -114,13 +116,51 @@ class StripeCreateIntentView(APIView):
                 subtotal=Decimal(producto.precio) * Decimal(d["cantidad"]),
             )
 
+        # 🔹 Si la venta es a crédito → generar el plan de pago automático
+        if tipo_pago == "credito":
+            try:
+                config = CreditConfig.objects.first()
+                interes = Decimal(config.tasa_interes) / Decimal("100")
+                total_con_interes = (total * (1 + interes)).quantize(Decimal("0.01"))
+
+                from creditos.models import CreditSale, CreditInstallment
+
+                credito = CreditSale.objects.create(
+                    nota_venta=venta,
+                    total_original=total,
+                    total_con_intereses=total_con_interes,
+                    tasa_aplicada=config.tasa_interes,
+                    saldo_pendiente=total_con_interes,
+                    estado="activo",
+                    fecha_inicial=timezone.now().date(),
+                    fecha_vencimiento=timezone.now().date() + timedelta(
+                        days=config.cantidad_cuotas * config.dias_entre_cuotas
+                    ),
+                )
+
+                monto_cuota = (total_con_interes / Decimal(config.cantidad_cuotas)).quantize(Decimal("0.01"))
+                for i in range(1, config.cantidad_cuotas + 1):
+                    CreditInstallment.objects.create(
+                        venta_credito=credito,
+                        numero=i,
+                        fecha_vencimiento=timezone.now().date() + timedelta(days=i * config.dias_entre_cuotas),
+                        monto=monto_cuota,
+                        pagado=False,
+                    )
+
+                print(f"✅ Plan de crédito generado: {config.cantidad_cuotas} cuotas de {monto_cuota} Bs.")
+            except Exception as e:
+                print("❌ Error al crear plan de crédito:", str(e))
+
+        # 🔹 Dirección de envío opcional
         if envio and envio.get("direccion"):
             print("🚚 Dirección registrada:", envio["direccion"])
-            # Si más adelante quieres guardar dirección de envío, hazlo aquí.
 
         print("✅ Venta simulada guardada con ID:", venta.id)
 
         return Response({"client_secret": intent.client_secret}, status=200)
+
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class StripeWebhookView(APIView):
